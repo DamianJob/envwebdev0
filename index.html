@@ -8,11 +8,32 @@
 </head>
 <body>
     <div class="container">
+        <!-- Setup Notice (remove after configuration) -->
+        <div id="setup-notice" class="setup-notice">
+            <h3>⚠️ Setup Required</h3>
+            <p>Please configure your Google Apps Script URL in the HTML file before using this website.</p>
+            <p>Replace <code>YOUR_SCRIPT_ID_HERE</code> with your actual deployed script URL.</p>
+            <button onclick="hideSetupNotice()">I've configured the script URL</button>
+        </div>
+
+        <!-- Debug Panel -->
+        <div id="debug-panel" class="debug-panel hidden">
+            <h3>🔧 Debug Information</h3>
+            <div class="debug-buttons">
+                <button onclick="testConnection()" class="debug-btn">Test Connection</button>
+                <button onclick="debugSheet()" class="debug-btn">Debug Sheet</button>
+                <button onclick="getAllZips()" class="debug-btn">Get All ZIP Codes</button>
+                <button onclick="toggleDebugPanel()" class="debug-btn close-btn">Close Debug</button>
+            </div>
+            <div id="debug-output" class="debug-output"></div>
+        </div>
+
         <!-- Header Section -->
         <header class="header">
             <h1>FLORIDA AGRICULTURAL AND MECHANICAL UNIVERSITY</h1>
             <h2>College of Pharmacy and Pharmaceutical Science</h2>
             <h3>Institute of Public Health</h3>
+            <button onclick="toggleDebugPanel()" class="debug-toggle">🔧 Debug</button>
         </header>
 
         <!-- Main Question Section -->
@@ -28,8 +49,10 @@
                 <label for="zipcode">Enter your 5-digit ZIP Code:</label>
                 <input type="text" id="zipcode" maxlength="5" pattern="[0-9]{5}" placeholder="32404" title="Please enter exactly 5 numerical digits">
                 <button onclick="searchWaterSystems()">Search Water Systems</button>
+                <button onclick="testConnection()" class="test-btn">Test Connection</button>
             </div>
             <div id="error-message" class="error-message"></div>
+            <div id="success-message" class="success-message"></div>
         </section>
 
         <!-- Loading Indicator -->
@@ -84,20 +107,133 @@
         let currentSystemIndex = 0;
         let currentMitigationIndex = 0;
 
-        // Replace with your Google Apps Script Web App URL
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyij8Hlq3vjWu4zbeOD4Mtg56iSm5h3fjs4APa02o3skKgntOfV_j8c5ZTIDGfkAfg/exec';
+        // IMPORTANT: Replace this URL with your actual Google Apps Script Web App URL
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxPgpyeFY-nXVR_awCR7NGEiJkHe449pvYuahGjlfb0RNc8SMfsmYIiBZEtudq1Hdzj/exec';
+
+        // Check if script URL is configured
+        function isScriptConfigured() {
+            return !SCRIPT_URL.includes('AKfycbxPgpyeFY-nXVR_awCR7NGEiJkHe449pvYuahGjlfb0RNc8SMfsmYIiBZEtudq1Hdzj');
+        }
+
+        function hideSetupNotice() {
+            document.getElementById('setup-notice').style.display = 'none';
+        }
+
+        function toggleDebugPanel() {
+            const panel = document.getElementById('debug-panel');
+            panel.classList.toggle('hidden');
+        }
 
         function validateZipCode(zipcode) {
             const zipPattern = /^[0-9]{5}$/;
             return zipPattern.test(zipcode);
         }
 
+        async function testConnection() {
+            if (!isScriptConfigured()) {
+                showError('Please configure your Google Apps Script URL first. Replace YOUR_SCRIPT_ID_HERE with your actual script ID.');
+                return;
+            }
+
+            showLoading('Testing connection...');
+            clearMessages();
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=testConnection`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(`Connection test failed: ${data.error}`);
+                } else {
+                    showSuccess('✅ Connection successful! Your Google Apps Script is working correctly.');
+                    if (data.sheetInfo) {
+                        console.log('Sheet info:', data.sheetInfo);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Connection test error:', error);
+                showError(`Connection failed: ${error.message}. Please check your Google Apps Script deployment.`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function debugSheet() {
+            if (!isScriptConfigured()) {
+                showError('Please configure your Google Apps Script URL first.');
+                return;
+            }
+
+            showLoading('Analyzing sheet structure...');
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=debugSheet`);
+                const data = await response.json();
+                
+                const debugOutput = document.getElementById('debug-output');
+                debugOutput.innerHTML = `
+                    <h4>Sheet Analysis Results:</h4>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+                console.log('Sheet debug data:', data);
+                
+            } catch (error) {
+                showError(`Debug failed: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function getAllZips() {
+            if (!isScriptConfigured()) {
+                showError('Please configure your Google Apps Script URL first.');
+                return;
+            }
+
+            showLoading('Getting all ZIP codes...');
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=getAllZips`);
+                const data = await response.json();
+                
+                const debugOutput = document.getElementById('debug-output');
+                debugOutput.innerHTML = `
+                    <h4>Available ZIP Codes in Your Sheet:</h4>
+                    <p><strong>Total ZIP codes found:</strong> ${data.zipCodes?.length || 0}</p>
+                    <div class="zip-list">
+                        ${data.zipCodes?.map(zip => `<span class="zip-code" onclick="document.getElementById('zipcode').value='${zip}'">${zip}</span>`).join('') || 'No ZIP codes found'}
+                    </div>
+                `;
+                
+                console.log('All ZIP codes:', data.zipCodes);
+                
+            } catch (error) {
+                showError(`Failed to get ZIP codes: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
         async function searchWaterSystems() {
+            if (!isScriptConfigured()) {
+                showError('Please configure your Google Apps Script URL first. Replace YOUR_SCRIPT_ID_HERE with your actual script ID.');
+                return;
+            }
+
             const zipcode = document.getElementById('zipcode').value.trim();
-            const errorDiv = document.getElementById('error-message');
             
-            // Clear previous results and errors
-            errorDiv.textContent = '';
+            // Clear previous results and messages
+            clearMessages();
             hideResults();
             
             // Validate ZIP code
@@ -112,19 +248,39 @@
             }
 
             // Show loading
-            document.getElementById('loading').classList.remove('hidden');
+            showLoading('Searching for water systems...');
 
             try {
-                const response = await fetch(`${SCRIPT_URL}?zipcode=${zipcode}&action=getWaterSystems`);
+                const response = await fetch(`${SCRIPT_URL}?zipcode=${zipcode}&action=getWaterSystems`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
                 const data = await response.json();
                 
+                console.log('Search response:', data);
+                
                 if (data.error) {
-                    showError(data.error);
+                    let errorMessage = data.error;
+                    
+                    // Add debug information if available
+                    if (data.debug) {
+                        console.log('Debug info:', data.debug);
+                        
+                        if (data.debug.sampleZipsFromSheet) {
+                            errorMessage += `\n\nAvailable ZIP codes in your sheet: ${data.debug.sampleZipsFromSheet.join(', ')}`;
+                        }
+                        
+                        if (data.debug.zipColumnName) {
+                            errorMessage += `\n\nSearching in column: "${data.debug.zipColumnName}"`;
+                        }
+                    }
+                    
+                    showError(errorMessage);
                     return;
                 }
 
@@ -137,19 +293,47 @@
 
                 displayWaterSystems();
                 displayMitigationInfo();
+                showSuccess(`Found ${waterSystems.length} water system(s) for ZIP code ${zipcode}`);
                 
             } catch (error) {
                 console.error('Error fetching data:', error);
-                showError('Error retrieving data. Please check your internet connection and try again.');
+                
+                if (error.message.includes('Failed to fetch')) {
+                    showError('Connection failed. Please check: 1) Your Google Apps Script is deployed as a web app, 2) The script URL is correct, 3) The script has proper permissions.');
+                } else {
+                    showError(`Error retrieving data: ${error.message}`);
+                }
             } finally {
-                document.getElementById('loading').classList.add('hidden');
+                hideLoading();
             }
         }
 
         function showError(message) {
             const errorDiv = document.getElementById('error-message');
-            errorDiv.textContent = message;
+            errorDiv.innerHTML = message.replace(/\n/g, '<br>');
             errorDiv.style.display = 'block';
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+
+        function clearMessages() {
+            document.getElementById('error-message').style.display = 'none';
+            document.getElementById('success-message').style.display = 'none';
+        }
+
+        function showLoading(message = 'Loading...') {
+            const loadingDiv = document.getElementById('loading');
+            const loadingText = loadingDiv.querySelector('p');
+            loadingText.textContent = message;
+            loadingDiv.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
         }
 
         function displayWaterSystems() {
@@ -354,6 +538,13 @@
             this.value = this.value.replace(/[^0-9]/g, '');
             if (this.value.length > 5) {
                 this.value = this.value.slice(0, 5);
+            }
+        });
+
+        // Check configuration on page load
+        window.addEventListener('load', function() {
+            if (isScriptConfigured()) {
+                hideSetupNotice();
             }
         });
     </script>
