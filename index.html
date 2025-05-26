@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAMU Water Quality Information System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <header class="header">
+            <h1>FLORIDA AGRICULTURAL AND MECHANICAL UNIVERSITY</h1>
+            <h2>College of Pharmacy and Pharmaceutical Science</h2>
+            <h3>Institute of Public Health</h3>
+        </header>
+
+        <!-- Main Question Section -->
+        <section class="question-section">
+            <div class="glowing-text">
+                Have you ever wondered what is the status of water quality around your area? 🤔
+            </div>
+        </section>
+
+        <!-- ZIP Code Input Section -->
+        <section class="input-section">
+            <div class="input-container">
+                <label for="zipcode">Enter your 5-digit ZIP Code:</label>
+                <input type="text" id="zipcode" maxlength="5" pattern="[0-9]{5}" placeholder="32404" title="Please enter exactly 5 numerical digits">
+                <button onclick="searchWaterSystems()">Search Water Systems</button>
+            </div>
+            <div id="error-message" class="error-message"></div>
+        </section>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Searching for water systems in your area...</p>
+        </div>
+
+        <!-- Water Systems Results -->
+        <section id="results-section" class="results-section hidden">
+            <h3>The following are information for water system(s) in the specified zip code</h3>
+            
+            <div class="carousel-container">
+                <button class="carousel-btn prev-btn" onclick="previousSite()" id="prev-water-btn">&lt;</button>
+                <div id="water-systems-carousel" class="water-systems-carousel">
+                    <!-- Water system cards will be inserted here -->
+                </div>
+                <button class="carousel-btn next-btn" onclick="nextSite()" id="next-water-btn">&gt;</button>
+            </div>
+            <div class="carousel-indicators" id="water-indicators"></div>
+        </section>
+
+        <!-- Mitigation Question -->
+        <section id="mitigation-question" class="mitigation-question hidden">
+            <div class="glowing-text blink">
+                Now that you know what is in your water after utilizing the above information, what are you recommended to do??
+            </div>
+        </section>
+
+        <!-- Mitigation Results -->
+        <section id="mitigation-section" class="mitigation-section hidden">
+            <div class="carousel-container">
+                <button class="carousel-btn prev-btn" onclick="previousMitigation()" id="prev-mitigation-btn">&lt;</button>
+                <div id="mitigation-carousel" class="mitigation-carousel">
+                    <!-- Mitigation cards will be inserted here -->
+                </div>
+                <button class="carousel-btn next-btn" onclick="nextMitigation()" id="next-mitigation-btn">&gt;</button>
+            </div>
+            <div class="carousel-indicators" id="mitigation-indicators"></div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Information that is displayed here is pulled from Publicly available data from the Florida Department of Environmental protection. It can only be used for water contamination risk communication and Mitigation</p>
+            <p><strong>Built by Meshalin Leon, Zyanayah Harris and Damian Kahamba</strong></p>
+        </footer>
+    </div>
+
+    <script>
+        // Global variables
+        let waterSystems = [];
+        let currentSystemIndex = 0;
+        let currentMitigationIndex = 0;
+
+        // Replace with your Google Apps Script Web App URL
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxD1EyOppqHaZ-Yzu0vXbSnk6Ka-TC9U9ZRqPciCir8AtKPglQYzK3z_Steq6TLmLii/exec';
+
+        function validateZipCode(zipcode) {
+            const zipPattern = /^[0-9]{5}$/;
+            return zipPattern.test(zipcode);
+        }
+
+        async function searchWaterSystems() {
+            const zipcode = document.getElementById('zipcode').value.trim();
+            const errorDiv = document.getElementById('error-message');
+            
+            // Clear previous results and errors
+            errorDiv.textContent = '';
+            hideResults();
+            
+            // Validate ZIP code
+            if (!zipcode) {
+                showError('Please enter a ZIP code.');
+                return;
+            }
+            
+            if (!validateZipCode(zipcode)) {
+                showError('Please enter a valid 5-digit numerical ZIP code.');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?zipcode=${zipcode}&action=getWaterSystems`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                waterSystems = data.systems || [];
+                
+                if (waterSystems.length === 0) {
+                    showError('No water systems found for this ZIP code. Please try a different ZIP code.');
+                    return;
+                }
+
+                displayWaterSystems();
+                displayMitigationInfo();
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showError('Error retrieving data. Please check your internet connection and try again.');
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function displayWaterSystems() {
+            const carousel = document.getElementById('water-systems-carousel');
+            carousel.innerHTML = '';
+            currentSystemIndex = 0;
+
+            waterSystems.forEach((system, index) => {
+                const systemCard = createWaterSystemCard(system, index);
+                carousel.appendChild(systemCard);
+            });
+
+            updateCarouselDisplay('water-systems-carousel', currentSystemIndex);
+            updateIndicators('water-indicators', waterSystems.length, currentSystemIndex);
+            updateCarouselButtons('water');
+            document.getElementById('results-section').classList.remove('hidden');
+        }
+
+        function createWaterSystemCard(system, index) {
+            const card = document.createElement('div');
+            card.className = 'water-system-card';
+            card.setAttribute('data-index', index);
+
+            // Collect all chemicals present
+            const chemicals = [];
+            for (let i = 1; i <= 9; i++) {
+                const chemical = system[`CHEMICAL ${i}`];
+                if (chemical && chemical.trim() && chemical.trim() !== '') {
+                    chemicals.push(chemical.trim());
+                }
+            }
+
+            card.innerHTML = `
+                <h4>SITE NAME: ${system.MAILINGNAME || 'N/A'}</h4>
+                <div class="site-contact">
+                    <h5>SITE CONTACT</h5>
+                    <p><strong>ADDRESS:</strong> ${system.ADDRESS1 || 'N/A'}</p>
+                    <p><strong>CITY:</strong> ${system.CITY || 'N/A'}</p>
+                    <p><strong>EMAIL:</strong> ${system.EMAIL || 'N/A'}</p>
+                    <p><strong>PHONE NUMBER:</strong> ${system.PHONE || 'N/A'}</p>
+                </div>
+                <div class="contamination-info">
+                    <p><strong>THE FOLLOWING WATER CONTAMINANTS WERE PRESENT DURING TESTING OF THE SITE IN THE YEAR 2023</strong></p>
+                    <p><strong>CHEMICALS PRESENT:</strong> ${chemicals.length > 0 ? chemicals.join(', ') : 'None detected'}</p>
+                    <p><strong>MICROBIOLOGY STATUS:</strong> ${system.MICROBIOLOGY || 'N/A'}</p>
+                </div>
+                <div class="disclaimer">
+                    <p><strong>Note:</strong> The presence of chemicals should not scare you, in some instances the detected level is below the lethal level. However, it is important to take necessary precaution and contact the specific water system and Florida Department of environmental protection for current data and mitigation measures that have been put in place to minimize risk.</p>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function displayMitigationInfo() {
+            const carousel = document.getElementById('mitigation-carousel');
+            carousel.innerHTML = '';
+            currentMitigationIndex = 0;
+
+            waterSystems.forEach((system, index) => {
+                const mitigationCard = createMitigationCard(system, index);
+                carousel.appendChild(mitigationCard);
+            });
+
+            updateCarouselDisplay('mitigation-carousel', currentMitigationIndex);
+            updateIndicators('mitigation-indicators', waterSystems.length, currentMitigationIndex);
+            updateCarouselButtons('mitigation');
+            document.getElementById('mitigation-question').classList.remove('hidden');
+            document.getElementById('mitigation-section').classList.remove('hidden');
+        }
+
+        function createMitigationCard(system, index) {
+            const card = document.createElement('div');
+            card.className = 'mitigation-card';
+            card.setAttribute('data-index', index);
+
+            let mitigationContent = `<h4>"${system.MAILINGNAME || 'N/A'}"</h4>`;
+            let hasRecommendations = false;
+
+            for (let i = 1; i <= 9; i++) {
+                const chemical = system[`CHEMICAL ${i}`];
+                const mitigation = system[`MITIGATION ${i}`];
+                
+                if (chemical && chemical.trim() && chemical.trim() !== '' && 
+                    mitigation && mitigation.trim() && mitigation.trim() !== '') {
+                    hasRecommendations = true;
+                    mitigationContent += `
+                        <div class="mitigation-item">
+                            <p class="chemical-name"><strong>For "${chemical.trim()}"</strong></p>
+                            <p class="recommendation-label">The following is recommended</p>
+                            <p class="recommendation-text">"${mitigation.trim()}"</p>
+                        </div>
+                    `;
+                }
+            }
+
+            if (!hasRecommendations) {
+                mitigationContent += `
+                    <div class="mitigation-item">
+                        <p class="no-recommendations">No specific mitigation recommendations available for detected chemicals at this site.</p>
+                        <p class="general-advice">Please contact the water system directly or the Florida Department of Environmental Protection for current guidance.</p>
+                    </div>
+                `;
+            }
+
+            card.innerHTML = mitigationContent;
+            return card;
+        }
+
+        function updateCarouselDisplay(carouselId, currentIndex) {
+            const carousel = document.getElementById(carouselId);
+            const cards = carousel.children;
+            
+            for (let i = 0; i < cards.length; i++) {
+                cards[i].style.display = i === currentIndex ? 'block' : 'none';
+            }
+        }
+
+        function updateIndicators(indicatorId, total, current) {
+            const container = document.getElementById(indicatorId);
+            container.innerHTML = '';
+            
+            if (total > 1) {
+                for (let i = 0; i < total; i++) {
+                    const dot = document.createElement('span');
+                    dot.className = `indicator-dot ${i === current ? 'active' : ''}`;
+                    dot.onclick = () => {
+                        if (indicatorId === 'water-indicators') {
+                            currentSystemIndex = i;
+                            updateCarouselDisplay('water-systems-carousel', currentSystemIndex);
+                            updateIndicators('water-indicators', waterSystems.length, currentSystemIndex);
+                        } else {
+                            currentMitigationIndex = i;
+                            updateCarouselDisplay('mitigation-carousel', currentMitigationIndex);
+                            updateIndicators('mitigation-indicators', waterSystems.length, currentMitigationIndex);
+                        }
+                    };
+                    container.appendChild(dot);
+                }
+            }
+        }
+
+        function updateCarouselButtons(type) {
+            const prevBtn = document.getElementById(`prev-${type}-btn`);
+            const nextBtn = document.getElementById(`next-${type}-btn`);
+            
+            if (waterSystems.length <= 1) {
+                prevBtn.style.display = 'none';
+                nextBtn.style.display = 'none';
+            } else {
+                prevBtn.style.display = 'block';
+                nextBtn.style.display = 'block';
+            }
+        }
+
+        function previousSite() {
+            if (waterSystems.length > 1) {
+                currentSystemIndex = (currentSystemIndex - 1 + waterSystems.length) % waterSystems.length;
+                updateCarouselDisplay('water-systems-carousel', currentSystemIndex);
+                updateIndicators('water-indicators', waterSystems.length, currentSystemIndex);
+            }
+        }
+
+        function nextSite() {
+            if (waterSystems.length > 1) {
+                currentSystemIndex = (currentSystemIndex + 1) % waterSystems.length;
+                updateCarouselDisplay('water-systems-carousel', currentSystemIndex);
+                updateIndicators('water-indicators', waterSystems.length, currentSystemIndex);
+            }
+        }
+
+        function previousMitigation() {
+            if (waterSystems.length > 1) {
+                currentMitigationIndex = (currentMitigationIndex - 1 + waterSystems.length) % waterSystems.length;
+                updateCarouselDisplay('mitigation-carousel', currentMitigationIndex);
+                updateIndicators('mitigation-indicators', waterSystems.length, currentMitigationIndex);
+            }
+        }
+
+        function nextMitigation() {
+            if (waterSystems.length > 1) {
+                currentMitigationIndex = (currentMitigationIndex + 1) % waterSystems.length;
+                updateCarouselDisplay('mitigation-carousel', currentMitigationIndex);
+                updateIndicators('mitigation-indicators', waterSystems.length, currentMitigationIndex);
+            }
+        }
+
+        function hideResults() {
+            document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('mitigation-question').classList.add('hidden');
+            document.getElementById('mitigation-section').classList.add('hidden');
+        }
+
+        // Event listeners
+        document.getElementById('zipcode').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchWaterSystems();
+            }
+        });
+
+        document.getElementById('zipcode').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length > 5) {
+                this.value = this.value.slice(0, 5);
+            }
+        });
+    </script>
+</body>
+</html>
